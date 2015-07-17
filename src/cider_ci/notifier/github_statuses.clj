@@ -68,7 +68,7 @@
 (defn build-body [params]
   {"state"  (map-state (:state params))
    "target_url"  (build-target-url params)
-   "description" (:state params)
+   "description" (str (:state params) " - " (:name params))
    "context"  (str "Cider-CI@" (:hostname (get-config)) " - " (:name params) )})
 
 (defn post-status [params]
