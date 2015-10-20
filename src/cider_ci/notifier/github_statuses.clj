@@ -28,7 +28,15 @@
       token
       nil)))
 
-(defn amend-with-url-properties [params]
+(defn- amend-with-url-properties-for-ssh [params]
+  (let [url (-> params :git_url)
+        [_ _ host org repository] (re-find #"(?i)(.*)\@(.*):(.*)\/(.*)" url)]
+    (merge params
+           {:host host
+            :org org
+            :repository (-> repository (.replaceAll ".git$" ""))})))
+
+(defn- amend-with-url-properties-for-http [params]
   (let [url (-> params :git_url URIBuilder.)
         path (.getPath url)
         path-segments (->> (clojure.string/split path #"\/")
@@ -36,9 +44,16 @@
     (merge params
            {:host (.getHost url)
             :org (first path-segments)
-            :repository (-> path-segments
-                            second
-                            (.replaceAll ".git$" ""))})))
+            :repository (-> path-segments second (.replaceAll ".git$" ""))})))
+
+(defn amend-with-url-properties [params]
+  (let [url (:git_url params)]
+    (cond (re-matches #"(?i)^http.*" url)
+          (amend-with-url-properties-for-http params)
+          (re-matches #"(?i)^.*github\.com:.*" url)
+          (amend-with-url-properties-for-ssh params)
+          :else (throw (ex-info "This URL schema is not supported "
+                                {:url url :params params})))))
 
 
 ;### POST Status ##############################################################
