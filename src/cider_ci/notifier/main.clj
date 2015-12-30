@@ -9,17 +9,17 @@
     [clj-logging-config.log4j :as logging-config]
     [clojure.data.json :as json]
     [clojure.tools.logging :as logging]
-    [drtom.logbug.catcher :as catcher]
-    [drtom.logbug.thrown]
+    [logbug.catcher :as catcher]
+    [logbug.thrown]
     [cider-ci.utils.nrepl :as nrepl]
     ))
 
 (defn -main [& args]
   (logging/info "The notifier is initializing ...")
-  (catcher/wrap-with-log-error
+  (catcher/with-logging {}
     (config/initialize)
     (let [conf (config/get-config)]
-      (drtom.logbug.thrown/reset-ns-filter-regex #".*cider.ci.*")
+      (logbug.thrown/reset-ns-filter-regex #".*cider.ci.*")
       (rdbms/initialize (get-db-spec :notifier))
       (messaging/initialize (:messaging conf))
       (cider-ci.notifier.github-statuses/initialize)

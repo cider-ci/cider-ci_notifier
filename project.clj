@@ -8,25 +8,25 @@
   :license {:name "GNU AFFERO GENERAL PUBLIC LICENSE Version 3"
             :url "http://www.gnu.org/licenses/agpl-3.0.html"}
   :dependencies [
-                 [cider-ci/clj-auth "3.0.0"]
-                 [cider-ci/clj-utils "3.0.3"]
+                 [cider-ci/clj-auth "5.0.1"]
+                 [cider-ci/clj-utils "5.1.2"]
                  [clj-http "2.0.0"]
-                 [honeysql "0.6.1"]
-                 [org.apache.httpcomponents/httpclient "4.5"]
+                 [honeysql "0.6.2"]
+                 [org.apache.httpcomponents/httpclient "4.5.1"]
                  [org.clojure/data.json "0.2.6"]
-                 [org.clojure/tools.nrepl "0.2.10"]
+                 [org.clojure/tools.nrepl "0.2.12"]
                  [ring/ring-codec "1.0.0"]
                  ]
   :source-paths ["src"]
   :profiles {:dev
-             {:dependencies [[midje "1.7.0"]]
+             {:dependencies [[midje "1.8.3"]]
               :plugins [[lein-midje "3.1.1"]]
               :repositories [["tmp" {:url "http://maven-repo-tmp.drtom.ch" :snapshots false}]]
-              :resource-paths ["../config" "./config" "./resources"]}
+              :resource-paths ["../config" "./config" "./resources"]
+              }
              :production
              {:resource-paths ["/etc/cider-ci" "../config" "./config" "./resources"]}}
   :aot [cider-ci.notifier.main]
   :main cider-ci.notifier.main
-  :jvm-opts ["-Xmx256m"]
   :repl-options {:timeout  120000}
   )

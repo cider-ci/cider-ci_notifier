@@ -4,8 +4,7 @@
 
 (ns cider-ci.notifier.web
   (:require
-    [cider-ci.auth.core :as auth]
-    [cider-ci.auth.core]
+    [cider-ci.auth.authorize :as authorize]
     [cider-ci.auth.http-basic :as http-basic]
     [cider-ci.utils.http :as http]
     [cider-ci.utils.http-server :as http-server]
@@ -13,32 +12,36 @@
     [cider-ci.utils.rdbms :as rdbms]
     [cider-ci.utils.routing :as routing]
     [cider-ci.utils.config :as config :refer [get-config]]
-    [clj-logging-config.log4j :as logging-config]
+    [cider-ci.utils.runtime :as runtime]
+
     [clojure.data :as data]
     [clojure.data.json :as json]
     [clojure.tools.logging :as logging]
     [compojure.core :as cpj]
     [compojure.handler :as cpj.handler]
-    [drtom.logbug.debug :as debug]
-    [drtom.logbug.ring :refer [wrap-handler-with-logging]]
     [ring.adapter.jetty :as jetty]
     [ring.middleware.json]
+
+    [logbug.debug :as debug :refer [÷> ÷>>]]
+    [logbug.ring :refer [wrap-handler-with-logging]]
+
+    [clj-logging-config.log4j :as logging-config]
     ))
 
 
 ;##### status dispatch ########################################################
 
 (defn status-handler [request]
-  (let [stati {:rdbms (rdbms/check-connection)
-               :messaging (messaging/check-connection)
-               }]
-    (if (every? identity (vals stati))
-      {:status 200
-       :body (json/write-str stati)
-       :headers {"content-type" "application/json;charset=utf-8"} }
-      {:status 511
-       :body (json/write-str stati)
-       :headers {"content-type" "application/json;charset=utf-8"} })))
+  (let [rdbms-status (rdbms/check-connection)
+        messaging-status (rdbms/check-connection)
+        memory-status (runtime/check-memory-usage)
+        body (json/write-str {:rdbms rdbms-status
+                              :messaging messaging-status
+                              :memory memory-status})]
+    {:status  (if (and rdbms-status messaging-status (:OK? memory-status))
+                200 499 )
+     :body body
+     :headers {"content-type" "application/json;charset=utf-8"} }))
 
 
 ;#### routing #################################################################
@@ -53,26 +56,20 @@
     ))
 
 (defn build-main-handler [context]
-  ( -> (cpj.handler/api (build-routes context))
-       (wrap-handler-with-logging 'cider-ci.notifier.web)
-       routing/wrap-shutdown
-       (wrap-handler-with-logging 'cider-ci.notifier.web)
-       (ring.middleware.json/wrap-json-body {:keywords? true})
-       (wrap-handler-with-logging 'cider-ci.notifier.web)
-       (routing/wrap-prefix context)
-       (wrap-handler-with-logging 'cider-ci.notifier.web)
-       (auth/wrap-authenticate-and-authorize-service)
-       (wrap-handler-with-logging 'cider-ci.notifier.web)
-       (http-basic/wrap {:executor false :user false :service true})
-       (wrap-handler-with-logging 'cider-ci.notifier.web)
-       (routing/wrap-log-exception)))
+  (÷> wrap-handler-with-logging
+      (cpj.handler/api (build-routes context))
+      routing/wrap-shutdown
+      (ring.middleware.json/wrap-json-body {:keywords? true})
+      (routing/wrap-prefix context)
+      (authorize/wrap-require! {:service true})
+      (http-basic/wrap {:executor false :user false :service true})
+      (routing/wrap-log-exception)))
 
 
 ;#### the server ##############################################################
 
 (defn initialize []
   (let [conf (get-config)]
-    (cider-ci.auth.core/initialize conf)
     (let [http-conf (-> conf :services :notifier :http)
           context (str (:context http-conf) (:sub_context http-conf))]
       (http-server/start http-conf (build-main-handler context)))))

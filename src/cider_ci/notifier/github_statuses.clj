@@ -11,8 +11,8 @@
     [clojure.data.json :as json]
     [clojure.java.jdbc :as jdbc]
     [clojure.tools.logging :as logging]
-    [drtom.logbug.catcher :as catcher]
-    [drtom.logbug.thrown]
+    [logbug.catcher :as catcher]
+    [logbug.thrown]
     [honeysql.core :as hc]
     [honeysql.helpers :as hh]
     [pg-types.all]
@@ -87,7 +87,7 @@
    "context"  (str "Cider-CI@" (:hostname (get-config)) " - " (:name params) )})
 
 (defn post-status [params]
-  (catcher/wrap-with-suppress-and-log-warn
+  (catcher/snatch {}
     (let [token (or (:repository_github_authtoken params)
                     (:default_github_authtoken params)
                     (throw (IllegalStateException. "Neither :repository_github_authtoken nor :default_github_authtoken given")))
@@ -120,7 +120,7 @@
                         (hc/raw (-> (get-default-github-token) boolean))]])))
 
 (defn evaluate-update [get-repos-and-jobs]
-  (future (catcher/wrap-with-suppress-and-log-error
+  (future (catcher/snatch {}
             (->> (get-repos-and-jobs)
                  (map amend-with-url-properties)
                  (map post-status)
