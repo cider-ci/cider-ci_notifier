@@ -26,7 +26,7 @@
               }
              :production
              {:resource-paths ["/etc/cider-ci" "../config" "./config" "./resources"]}}
-  :aot [cider-ci.notifier.main]
+  :aot :all
   :main cider-ci.notifier.main
   :repl-options {:timeout  120000}
   )
