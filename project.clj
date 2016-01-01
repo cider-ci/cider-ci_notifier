@@ -9,7 +9,7 @@
             :url "http://www.gnu.org/licenses/agpl-3.0.html"}
   :dependencies [
                  [cider-ci/clj-auth "5.0.1"]
-                 [cider-ci/clj-utils "5.1.2"]
+                 [cider-ci/clj-utils "6.0.0"]
                  [clj-http "2.0.0"]
                  [honeysql "0.6.2"]
                  [org.apache.httpcomponents/httpclient "4.5.1"]

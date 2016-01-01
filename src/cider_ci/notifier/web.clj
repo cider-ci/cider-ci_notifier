@@ -8,8 +8,6 @@
     [cider-ci.auth.http-basic :as http-basic]
     [cider-ci.utils.http :as http]
     [cider-ci.utils.http-server :as http-server]
-    [cider-ci.utils.messaging :as messaging]
-    [cider-ci.utils.rdbms :as rdbms]
     [cider-ci.utils.routing :as routing]
     [cider-ci.utils.config :as config :refer [get-config]]
     [cider-ci.utils.runtime :as runtime]
@@ -21,6 +19,8 @@
     [compojure.handler :as cpj.handler]
     [ring.adapter.jetty :as jetty]
     [ring.middleware.json]
+    [cider-ci.utils.status :as status]
+
 
     [logbug.debug :as debug :refer [÷> ÷>>]]
     [logbug.ring :refer [wrap-handler-with-logging]]
@@ -29,30 +29,10 @@
     ))
 
 
-;##### status dispatch ########################################################
-
-(defn status-handler [request]
-  (let [rdbms-status (rdbms/check-connection)
-        messaging-status (rdbms/check-connection)
-        memory-status (runtime/check-memory-usage)
-        body (json/write-str {:rdbms rdbms-status
-                              :messaging messaging-status
-                              :memory memory-status})]
-    {:status  (if (and rdbms-status messaging-status (:OK? memory-status))
-                200 499 )
-     :body body
-     :headers {"content-type" "application/json;charset=utf-8"} }))
-
-
 ;#### routing #################################################################
 
 (defn build-routes [context]
   (cpj/routes
-
-    (cpj/GET "/status" request #'status-handler)
-
-    (cpj/GET "/" [] "OK")
-
     ))
 
 (defn build-main-handler [context]
@@ -60,6 +40,7 @@
       (cpj.handler/api (build-routes context))
       routing/wrap-shutdown
       (ring.middleware.json/wrap-json-body {:keywords? true})
+      status/wrap
       (routing/wrap-prefix context)
       (authorize/wrap-require! {:service true})
       (http-basic/wrap {:executor false :user false :service true})

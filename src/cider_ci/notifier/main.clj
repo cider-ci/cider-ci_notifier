@@ -17,7 +17,7 @@
 (defn -main [& args]
   (logging/info "The notifier is initializing ...")
   (catcher/with-logging {}
-    (config/initialize)
+    (config/initialize {})
     (let [conf (config/get-config)]
       (logbug.thrown/reset-ns-filter-regex #".*cider.ci.*")
       (rdbms/initialize (get-db-spec :notifier))
