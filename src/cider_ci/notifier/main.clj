@@ -1,4 +1,5 @@
 (ns cider-ci.notifier.main
+  (:gen-class)
   (:require
     [cider-ci.notifier.github-statuses]
     [cider-ci.notifier.web :as web]

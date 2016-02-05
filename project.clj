@@ -8,9 +8,9 @@
   :license {:name "GNU AFFERO GENERAL PUBLIC LICENSE Version 3"
             :url "http://www.gnu.org/licenses/agpl-3.0.html"}
   :dependencies [
-                 [cider-ci/clj-auth "5.0.1"]
-                 [cider-ci/clj-utils "6.1.0"]
-                 [clj-http "2.0.0"]
+                 [cider-ci/clj-auth "6.0.0"]
+                 [cider-ci/clj-utils "7.0.0"]
+                 [clj-http "2.0.1"]
                  [honeysql "0.6.2"]
                  [org.apache.httpcomponents/httpclient "4.5.1"]
                  [org.clojure/data.json "0.2.6"]

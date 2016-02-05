@@ -22,7 +22,7 @@
     [cider-ci.utils.status :as status]
 
 
-    [logbug.debug :as debug :refer [÷> ÷>>]]
+    [logbug.debug :as debug :refer [I> I>>]]
     [logbug.ring :refer [wrap-handler-with-logging]]
 
     [clj-logging-config.log4j :as logging-config]
@@ -36,7 +36,7 @@
     ))
 
 (defn build-main-handler [context]
-  (÷> wrap-handler-with-logging
+  (I> wrap-handler-with-logging
       (cpj.handler/api (build-routes context))
       routing/wrap-shutdown
       (ring.middleware.json/wrap-json-body {:keywords? true})
