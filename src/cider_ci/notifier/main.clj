@@ -1,3 +1,7 @@
+; Copyright © 2013 - 2016 Dr. Thomas Schank <Thomas.Schank@AlgoCon.ch>
+; Licensed under the terms of the GNU Affero General Public License v3.
+; See the "LICENSE.txt" file provided with this software.
+
 (ns cider-ci.notifier.main
   (:gen-class)
   (:require
@@ -18,7 +22,7 @@
 (defn -main [& args]
   (logging/info "The notifier is initializing ...")
   (catcher/with-logging {}
-    (config/initialize {})
+    (config/initialize {:overrides {:service :notifier}})
     (let [conf (config/get-config)]
       (logbug.thrown/reset-ns-filter-regex #".*cider.ci.*")
       (rdbms/initialize (get-db-spec :notifier))
@@ -27,7 +31,6 @@
       (nrepl/initialize (-> conf :services :notifier :nrepl))
       (web/initialize)))
   (logging/info "The notifier is listening ..."))
-
 
 ;#### debug ###################################################################
 ;(logging-config/set-logger! :level :debug)

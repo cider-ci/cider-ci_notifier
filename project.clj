@@ -1,18 +1,20 @@
-; Copyright (C) 2013, 2014, 2015 Dr. Thomas Schank  (DrTom@schank.ch, Thomas.Schank@algocon.ch)
+; Copyright © 2013 - 2016 Dr. Thomas Schank <Thomas.Schank@AlgoCon.ch>
 ; Licensed under the terms of the GNU Affero General Public License v3.
 ; See the "LICENSE.txt" file provided with this software.
 
+(import 'java.io.File)
+(load-file (str "src" File/separator "cider_ci" File/separator "notifier.clj"))
 
-(defproject cider-ci_notifier "3.0.0"
+(defproject cider-ci_notifier cider-ci.notifier/VERSION
   :description "Cider-CI Notifier"
   :license {:name "GNU AFFERO GENERAL PUBLIC LICENSE Version 3"
             :url "http://www.gnu.org/licenses/agpl-3.0.html"}
   :dependencies [
-                 [cider-ci/clj-auth "6.0.0"]
-                 [cider-ci/clj-utils "7.0.0"]
-                 [clj-http "2.0.1"]
-                 [honeysql "0.6.2"]
-                 [org.apache.httpcomponents/httpclient "4.5.1"]
+                 [cider-ci/clj-utils "8.3.0"]
+
+                 [clj-http "2.1.0"]
+                 [honeysql "0.6.3"]
+                 [org.apache.httpcomponents/httpclient "4.5.2"]
                  [org.clojure/data.json "0.2.6"]
                  [org.clojure/tools.nrepl "0.2.12"]
                  [ring/ring-codec "1.0.0"]
