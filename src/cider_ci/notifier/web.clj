@@ -32,8 +32,7 @@
 ;#### routing #################################################################
 
 (defn build-routes [context]
-  (cpj/routes
-    ))
+  (cpj/routes))
 
 (defn build-main-handler [context]
   (I> wrap-handler-with-logging
@@ -45,16 +44,6 @@
       (authorize/wrap-require! {:service true})
       (http-basic/wrap {:executor false :user false :service true})
       (routing/wrap-log-exception)))
-
-
-;#### the server ##############################################################
-
-(defn initialize []
-  (let [conf (get-config)]
-    (let [http-conf (-> conf :services :notifier :http)
-          context (str (:context http-conf) (:sub_context http-conf))]
-      (http-server/start http-conf (build-main-handler context)))))
-
 
 
 ;#### debug ###################################################################

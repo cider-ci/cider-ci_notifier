@@ -7,57 +7,24 @@
     [org.apache.http.client.utils URIBuilder]
     )
   (:require
-    [cider-ci.utils.messaging :as messaging]
     [cider-ci.utils.config :as config :refer [get-config get-db-spec]]
+    [cider-ci.utils.messaging :as messaging]
     [cider-ci.utils.rdbms :as rdbms]
     [clj-http.client :as http-client]
-    [clj-logging-config.log4j :as logging-config]
     [clojure.data.json :as json]
     [clojure.java.jdbc :as jdbc]
-    [clojure.tools.logging :as logging]
+    [honeysql.core :as sql]
     [logbug.catcher :as catcher]
     [logbug.thrown]
-    [honeysql.core :as hc]
-    [honeysql.helpers :as hh]
     [pg-types.all]
     [ring.util.codec :refer [url-encode]]
+
+    [clj-logging-config.log4j :as logging-config]
+    [clojure.tools.logging :as logging]
+    [logbug.catcher :as catcher :refer [snatch]]
+    [logbug.debug :as debug :refer [I> I>>]]
+    [logbug.thrown :as thrown]
     ))
-
-
-;### helper ###################################################################
-
-(defn get-default-github-token []
-  (let [token (-> (get-config) :github_authtoken)]
-    (if (-> token clojure.string/blank? not)
-      token
-      nil)))
-
-(defn- amend-with-url-properties-for-ssh [params]
-  (let [url (-> params :git_url)
-        [_ _ host org repository] (re-find #"(?i)(.*)\@(.*):(.*)\/(.*)" url)]
-    (merge params
-           {:host host
-            :org org
-            :repository (-> repository (.replaceAll ".git$" ""))})))
-
-(defn- amend-with-url-properties-for-http [params]
-  (let [url (-> params :git_url URIBuilder.)
-        path (.getPath url)
-        path-segments (->> (clojure.string/split path #"\/")
-                           (filter #(not (clojure.string/blank? %))))]
-    (merge params
-           {:host (.getHost url)
-            :org (first path-segments)
-            :repository (-> path-segments second (.replaceAll ".git$" ""))})))
-
-(defn amend-with-url-properties [params]
-  (let [url (:git_url params)]
-    (cond (re-matches #"(?i)^http.*" url)
-          (amend-with-url-properties-for-http params)
-          (re-matches #"(?i)^.*github\.com:.*" url)
-          (amend-with-url-properties-for-ssh params)
-          :else (throw (ex-info "This URL schema is not supported "
-                                {:url url :params params})))))
 
 
 ;### POST Status ##############################################################
@@ -72,10 +39,14 @@
          (:job_id params))))
 
 (defn build-url [params]
-  (str "https://api.github.com/repos/"
-       (-> params :org url-encode) "/" (-> params :repository url-encode)
-       "/statuses/"
-       (-> params :commit_id url-encode)))
+  (->> [ "repos"
+        (:api_owner params)
+        (:api_repo params)
+        "statuses"
+        (:commit_id params)]
+       (map url-encode)
+       (concat [(:api_endpoint params)])
+       (clojure.string/join "/")))
 
 (defn map-state [state]
   (case state
@@ -91,10 +62,9 @@
    "context"  (str "Cider-CI@" (:hostname (get-config)) " - " (:name params) )})
 
 (defn post-status [params]
-  (catcher/snatch {}
-    (let [token (or (:repository_github_authtoken params)
-                    (:default_github_authtoken params)
-                    (throw (IllegalStateException. "Neither :repository_github_authtoken nor :default_github_authtoken given")))
+  (catcher/snatch
+    {}
+    (let [token (:api_authtoken params)
           url (-> params build-url)
           body (-> params build-body json/write-str)]
       (logging/debug [token url body])
@@ -107,40 +77,39 @@
 
 ;### shared ###################################################################
 
-(defn base-query []
-  (-> (hh/select :repositories.git_url
-                 [:repositories.github_authtoken :repository_github_authtoken]
-                 [:jobs.id  :job_id]
-                 :jobs.name
-                 :jobs.state
-                 [(get-default-github-token) :default_github_authtoken]
-                 [:commits.id :commit_id])
-      (hh/modifiers :distinct)
-      (hh/from :repositories)
-      (hh/merge-where [:or
-                       [:<> :repositories.github_authtoken nil]
-                       [:and
-                        [:= :repositories.use_default_github_authtoken true ]
-                        (hc/raw (-> (get-default-github-token) boolean))]])))
+(def base-query
+  (-> (sql/select :repositories.git_url
+                  [:repositories.foreign_api_endpoint :api_endpoint]
+                  [:repositories.foreign_api_authtoken :api_authtoken]
+                  [:repositories.foreign_api_owner :api_owner]
+                  [:repositories.foreign_api_repo :api_repo]
+                  [:jobs.id  :job_id]
+                  :jobs.name
+                  :jobs.state
+                  [:commits.id :commit_id])
+      (sql/modifiers :distinct)
+      (sql/from :repositories)
+      (sql/merge-where (sql/raw (str "repositories.foreign_api_endpoint !~ '^\\s*$'")))
+      (sql/merge-where (sql/raw (str "repositories.foreign_api_authtoken !~ '^\\s*$'")))
+      (sql/merge-where (sql/raw (str "repositories.foreign_api_owner !~ '^\\s*$'")))
+      (sql/merge-where (sql/raw (str "repositories.foreign_api_repo !~ '^\\s*$'")))))
 
 (defn evaluate-update [get-repos-and-jobs]
-  (future (catcher/snatch {}
-            (->> (get-repos-and-jobs)
-                 (map amend-with-url-properties)
-                 (map post-status)
-                 doall))))
+  (future (catcher/snatch {} (->> (get-repos-and-jobs)
+                                  (map post-status)
+                                  doall))))
 
 
 ;### Job update ###############################################################
 
 (defn build-repos-and-jobs-query-by-job-id [job-id]
-  (-> (base-query)
-      (hh/merge-join :branches [:= :branches.repository_id :repositories.id])
-      (hh/merge-join :branches_commits [:= :branches.id :branches_commits.branch_id])
-      (hh/merge-join :commits [:= :commits.id :branches_commits.commit_id])
-      (hh/merge-join :jobs [:= :jobs.tree_id :commits.tree_id])
-      (hh/merge-where [:= :jobs.id job-id])
-      hc/format))
+  (-> base-query
+      (sql/merge-join :branches [:= :branches.repository_id :repositories.id])
+      (sql/merge-join :branches_commits [:= :branches.id :branches_commits.branch_id])
+      (sql/merge-join :commits [:= :commits.id :branches_commits.commit_id])
+      (sql/merge-join :jobs [:= :jobs.tree_id :commits.tree_id])
+      (sql/merge-where [:= :jobs.id job-id])
+      sql/format))
 
 (defn get-repos-and-jobs-by-job-update [msg]
   (jdbc/query
@@ -151,7 +120,6 @@
   (evaluate-update
     (fn [] (get-repos-and-jobs-by-job-update msg))))
 
-;(evaluate-job-update {:id "9fba4026-8968-4ad4-98ea-8f583c5955f5", :state "passed"})
 (defn listen-to-job-updates-and-fire-evaluate-job-update []
   (messaging/listen "job.updated" evaluate-job-update))
 
@@ -159,13 +127,13 @@
 ;### Branch update ############################################################
 
 (defn get-repos-and-jobs-by-branch-update [msg]
-  (let [query (-> (base-query)
-                  (hh/merge-join :branches [:= :branches.repository_id :repositories.id])
-                  (hh/merge-join :commits [:= :commits.id :branches.current_commit_id])
-                  (hh/merge-join :jobs [:= :jobs.tree_id :commits.tree_id])
-                  (hh/merge-where [:= :repositories.id (:repository_id msg)])
-                  (hh/merge-where [:= :branches.name (:name msg)])
-                  hc/format)]
+  (let [query (-> base-query
+                  (sql/merge-join :branches [:= :branches.repository_id :repositories.id])
+                  (sql/merge-join :commits [:= :commits.id :branches.current_commit_id])
+                  (sql/merge-join :jobs [:= :jobs.tree_id :commits.tree_id])
+                  (sql/merge-where [:= :repositories.id (:repository_id msg)])
+                  (sql/merge-where [:= :branches.name (:name msg)])
+                  sql/format)]
     (jdbc/query
       (rdbms/get-ds)
       query)))
