@@ -7,22 +7,24 @@
     [org.apache.http.client.utils URIBuilder]
     )
   (:require
+
+    [cider-ci.utils.daemon :refer [defdaemon]]
     [cider-ci.utils.config :as config :refer [get-config get-db-spec]]
     [cider-ci.utils.messaging :as messaging]
     [cider-ci.utils.rdbms :as rdbms]
+
     [clj-http.client :as http-client]
     [clojure.data.json :as json]
     [clojure.java.jdbc :as jdbc]
     [honeysql.core :as sql]
     [logbug.catcher :as catcher]
-    [logbug.thrown]
     [pg-types.all]
     [ring.util.codec :refer [url-encode]]
 
     [clj-logging-config.log4j :as logging-config]
     [clojure.tools.logging :as logging]
     [logbug.catcher :as catcher :refer [snatch]]
-    [logbug.debug :as debug :refer [I> I>>]]
+    [logbug.debug :as debug :refer [I> I>> identity-with-logging]]
     [logbug.thrown :as thrown]
     ))
 
@@ -111,17 +113,39 @@
       (sql/merge-where [:= :jobs.id job-id])
       sql/format))
 
-(defn get-repos-and-jobs-by-job-update [msg]
+(defn get-repos-and-jobs-by-job-update [job-id]
   (jdbc/query
     (rdbms/get-ds)
-    (build-repos-and-jobs-query-by-job-id (:id msg))))
+    (build-repos-and-jobs-query-by-job-id job-id)))
 
-(defn evaluate-job-update [msg]
+(defn evaluate-job-update [job-id]
   (evaluate-update
-    (fn [] (get-repos-and-jobs-by-job-update msg))))
+    (fn [] (get-repos-and-jobs-by-job-update job-id))))
 
-(defn listen-to-job-updates-and-fire-evaluate-job-update []
-  (messaging/listen "job.updated" evaluate-job-update))
+
+
+;### Listen to job updates ####################################################
+
+(def last-processed-job-update (atom nil))
+
+(defn process-job-updates [proc]
+  (when-let [after-row (or @last-processed-job-update
+                           (->> [(str "SELECT * FROM job_state_update_events"
+                                      " ORDER BY created_at DESC, id LIMIT 1")]
+                                (jdbc/query (rdbms/get-ds))
+                                first))]
+    (if-let [lst (->> [(str "SELECT * FROM job_state_update_events"
+                            " WHERE created_at >= ? AND id != ?"
+                            " ORDER BY created_at ASC , id LIMIT 100")
+                       (:created_at after-row) (:id after-row)]
+                      (jdbc/query (rdbms/get-ds))
+                      (map (fn [row] (proc (:jod_id row)) row))
+                      last)]
+      (reset! last-processed-job-update lst)
+      (reset! last-processed-job-update after-row))))
+
+(defdaemon "process-job-updates"
+  3 (process-job-updates evaluate-job-update))
 
 
 ;### Branch update ############################################################
@@ -149,11 +173,12 @@
 ;### Initialize ###############################################################
 
 (defn initialize []
-  (listen-to-job-updates-and-fire-evaluate-job-update)
+  (start-process-job-updates)
+  ; TODO replace the following
   (listen-to-branch-updates-and-fire-evaluate-branch-update))
 
 
 ;#### debug ###################################################################
 ;(logging-config/set-logger! :level :debug)
 ;(logging-config/set-logger! :level :info)
-;(debug/debug-ns *ns*)
+(debug/debug-ns *ns*)
