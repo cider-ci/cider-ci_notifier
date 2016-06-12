@@ -130,22 +130,24 @@
 
 (defn process-job-updates [proc]
   (when-let [after-row (or @last-processed-job-update
-                           (->> [(str "SELECT * FROM job_state_update_events"
+                           (I>> identity-with-logging
+                                [(str "SELECT * FROM job_state_update_events"
                                       " ORDER BY created_at DESC, id LIMIT 1")]
                                 (jdbc/query (rdbms/get-ds))
                                 first))]
-    (if-let [lst (->> [(str "SELECT * FROM job_state_update_events"
+    (if-let [lst (I>> identity-with-logging
+                      [(str "SELECT * FROM job_state_update_events"
                             " WHERE created_at >= ? AND id != ?"
                             " ORDER BY created_at ASC , id LIMIT 100")
                        (:created_at after-row) (:id after-row)]
                       (jdbc/query (rdbms/get-ds))
-                      (map (fn [row] (proc (:jod_id row)) row))
+                      (map (fn [row] (proc (:job_id row)) row))
                       last)]
       (reset! last-processed-job-update lst)
       (reset! last-processed-job-update after-row))))
 
 (defdaemon "process-job-updates"
-  3 (process-job-updates evaluate-job-update))
+  1 (process-job-updates evaluate-job-update))
 
 
 ;### Branch update ############################################################
@@ -181,4 +183,4 @@
 ;#### debug ###################################################################
 ;(logging-config/set-logger! :level :debug)
 ;(logging-config/set-logger! :level :info)
-(debug/debug-ns *ns*)
+;(debug/debug-ns *ns*)
