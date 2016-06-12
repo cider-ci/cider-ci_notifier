@@ -10,7 +10,6 @@
 
     [cider-ci.utils.config :as config :refer [get-config get-db-spec]]
     [cider-ci.utils.daemon :refer [defdaemon]]
-    [cider-ci.utils.messaging :as messaging]
     [cider-ci.utils.rdbms :as rdbms]
     [cider-ci.utils.row-events :as row-events]
 
